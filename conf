@@ -1,0 +1,15 @@
+[kafka]
+ip_port=127.0.0.1:9092
+
+[zookeepers]
+ip_port=127.0.0.1:2181
+
+[elasticsearch]
+ip_port=127.0.0.1:9200
+index_name=kafka
+all_type_name=all
+bulk_num=10
+
+[time]
+sleep_time=10
+
