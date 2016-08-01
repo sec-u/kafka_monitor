@@ -154,8 +154,7 @@ class KafkaMonitor(object):
             return group_data
         except Exception as e:
             date = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
-            print(date)
-            print(u"获取group %s 数据失败" % group)
+            print(u"%s 获取group %s 数据失败" % (date, group))
             logging.exception(e)
             return None
 
@@ -251,8 +250,7 @@ class EsIndex(object):
             self.es.index(index=index_name, doc_type=doc_type, body=data_json)
         except Exception as e:
             date = datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f')
-            print(date)
-            print(u"index数据插入es失败")
+            print(u"%s index数据插入es失败" % date)
 
     def bulk_data(self):
         """ 构造要插入的bulk数据 """
@@ -283,8 +281,7 @@ class EsIndex(object):
             helpers.bulk(self.es, data)
         except Exception as e:
             date = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
-            print(date)
-            print(u'bulk数据插入es失败')
+            print(u'%s bulk数据插入es失败' % date)
 
     def es_bulk_worker(self):
         """ bulk 插入 """
@@ -346,4 +343,4 @@ if __name__ == '__main__':
     thread_kafka.start()
     # es 线程实例化 启动
     thread_es = MyThread(es.run)
-    thread_es.run()
+    thread_es.start()
