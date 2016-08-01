@@ -10,6 +10,7 @@
 
 import json
 import time
+import logging
 from ConfigParser import ConfigParser
 from Queue import Queue
 from datetime import datetime
@@ -52,13 +53,19 @@ class MyConsumer(SimpleConsumer):
 class KafkaMonitor(object):
     def __init__(self, queue, kf_ip_port='localhost',
                  zk_ip_port='localhost', kf_sleep_time=10, all_data_type_name='all'):
-        self.zookeepers_hosts = zk_ip_port
+        # 连接 kafka
         self.kafka_hosts = kf_ip_port
+        self.broker = SimpleClient(hosts=self.kafka_hosts)
+        # 连接zookeeper
+        self.zookeepers_hosts = zk_ip_port
         self.zk = KazooClient(hosts=self.zookeepers_hosts, read_only=True)
+        # 数据存放列队
         self.data_queue = queue
-        self.group_topic = {}
+        # 循环睡眠时间
         self.sleep_time = kf_sleep_time
+        # 总计数据 doc type
         self.all_data_type_name = all_data_type_name
+        # 连接池
         self.consumers = {}
 
     def get_group(self):
@@ -79,6 +86,8 @@ class KafkaMonitor(object):
         k_name = '%s_%s' % (str(group), str(topic))
         consumer = MyConsumer(self.broker, group, str(topic))
         self.consumers[k_name] = consumer
+        date = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+        print('threading', date, len(self.consumers), group, topic, self.consumers)
         return self._get_log_size(consumer)
 
     def _get_log_size(self, consumer):
@@ -136,10 +145,15 @@ class KafkaMonitor(object):
                 lag_all += lag
                 log_size_all += log_size
                 offset_all += offset
+            # 一个 group 数据总和
             group_all = {'lag': lag_all, 'log_size': log_size_all, 'offset': offset_all}
             group_data.append(group_all)
             return group_data
-        except:
+        except Exception as e:
+            date = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+            print(date)
+            print("获取group %s 数据失败" % group)
+            logging.exception(e)
             return None
 
     def worker(self):
@@ -155,6 +169,8 @@ class KafkaMonitor(object):
                 # 一个 group 内的数据列表
                 # 获取 group 内的 topics 列表
                 topics = self.get_topics(group)
+                if not topics:
+                    continue
                 # 获取 group 数据列表
                 group_data = self.get_date(group, topics)
                 if group_data:
@@ -164,18 +180,21 @@ class KafkaMonitor(object):
                     offset_all += group_all['offset']
                     # group 数据列表加入到本次循环的data 字典
                     data[group] = group_data
+            # 所有 group 数据总和
             group_all_data_dict = {'topic_name': self.all_data_type_name, 'lag': lag_all, 'log_size': log_size_all,
                                    'offset': offset_all}
             group_all_data_list = [group_all_data_dict]
             data['All'] = group_all_data_list
             # 本次循环的data 字典加入到 Queue
             self.data_queue.put(data)
-        except:
+        except Exception as e:
+            date = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+            print(date)
+            logging.exception(e)
             time.sleep(3)
 
     def run(self):
         self.zk.start()
-        self.broker = SimpleClient(hosts=self.kafka_hosts)
         while True:
             self.worker()
             # 睡眠
@@ -220,8 +239,9 @@ class EsIndex(object):
             self.es.index(index=index_name, doc_type=doc_type, body=data_json)
         except Exception as e:
             date = datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f')
-            print(date, e)
-            time.sleep(5)
+            print(date)
+            print("index数据插入es失败")
+            logging.exception(e)
 
     def bulk_data(self):
         """ 构造要插入的bulk数据 """
@@ -251,8 +271,10 @@ class EsIndex(object):
         try:
             helpers.bulk(self.es, data)
         except Exception as e:
-            date = datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f')
-            print(date, e)
+            date = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+            print(date)
+            print('bulk数据插入es失败')
+            logging.exception(e)
 
     def es_bulk_worker(self):
         """ bulk 插入 """
@@ -280,9 +302,11 @@ class EsIndex(object):
         thread_data = MyThread(self.data_worker)
         thread_data.start()
         if self.bulk_num == 0:
+            # 单条提交数据
             thread_es_index = MyThread(self.es_worker)
             thread_es_index.start()
         else:
+            # bulk 提交数据
             thread_es_bulk = MyThread(self.es_bulk_worker)
             thread_es_bulk.start()
 
@@ -313,4 +337,3 @@ if __name__ == '__main__':
     # es 线程实例化 启动
     thread_es = MyThread(es.run)
     thread_es.run()
-
