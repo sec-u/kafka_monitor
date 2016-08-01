@@ -67,6 +67,8 @@ class KafkaMonitor(object):
         self.all_data_type_name = all_data_type_name
         # 连接池
         self.consumers = {}
+        # 每次循环所需要的连接
+        self.consumer_set = set()
 
     def get_group(self):
         """获取zookeepers下的group"""
@@ -98,6 +100,7 @@ class KafkaMonitor(object):
     def get_log_size(self, group, topic):
         """取出 consumers 连接"""
         k_name = '%s_%s' % (str(group), str(topic))
+        self.consumer_set.add(k_name)
         if k_name in self.consumers:
             consumer = self.consumers[k_name]
             return self._get_log_size(consumer)
@@ -152,12 +155,20 @@ class KafkaMonitor(object):
         except Exception as e:
             date = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
             print(date)
-            print("获取group %s 数据失败" % group)
+            print(u"获取group %s 数据失败" % group)
             logging.exception(e)
             return None
 
+    def consumer_dict_clean(self):
+        """ 连接池清理 """
+        for k, v in self.consumers.items():
+            if k not in self.consumer_set:
+                v.stop()
+                self.consumers.pop(k)
+
     def worker(self):
         try:
+            self.consumer_set = set()
             # 获取 groups_name 列表
             groups_name = self.get_group()
             # 定义本次循环 data 字典
@@ -187,6 +198,7 @@ class KafkaMonitor(object):
             data['All'] = group_all_data_list
             # 本次循环的data 字典加入到 Queue
             self.data_queue.put(data)
+            self.consumer_dict_clean()
         except Exception as e:
             date = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
             print(date)
@@ -240,8 +252,7 @@ class EsIndex(object):
         except Exception as e:
             date = datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f')
             print(date)
-            print("index数据插入es失败")
-            logging.exception(e)
+            print(u"index数据插入es失败")
 
     def bulk_data(self):
         """ 构造要插入的bulk数据 """
@@ -273,8 +284,7 @@ class EsIndex(object):
         except Exception as e:
             date = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
             print(date)
-            print('bulk数据插入es失败')
-            logging.exception(e)
+            print(u'bulk数据插入es失败')
 
     def es_bulk_worker(self):
         """ bulk 插入 """
