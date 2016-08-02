@@ -69,6 +69,8 @@ class KafkaMonitor(object):
         self.consumers = {}
         # 每次循环所需要的连接
         self.consumer_set = set()
+        # 上次运行数据
+        self.last_data = {}
 
     def get_group(self):
         """获取zookeepers下的group"""
@@ -80,7 +82,7 @@ class KafkaMonitor(object):
         try:
             topics = self.zk.get_children("/consumers/%s/owners" % group)
             return topics
-        except:
+        except Exception:
             return None
 
     def add_consumer_dict(self, group, topic):
@@ -92,7 +94,8 @@ class KafkaMonitor(object):
         print('threading', date, len(self.consumers), group, topic, self.consumers)
         return self._get_log_size(consumer)
 
-    def _get_log_size(self, consumer):
+    @staticmethod
+    def _get_log_size(consumer):
         """topic下消费量"""
         offset = consumer.my_pending()
         return offset
@@ -118,38 +121,71 @@ class KafkaMonitor(object):
                     data, stat = self.zk.get(log)
                     log_size += int(data)
             return log_size
-        except:
+        except Exception:
             return None
 
-    def get_lag(self, log_size, offset):
+    @staticmethod
+    def get_lag(log_size, offset):
         """topic下积压量"""
         lag = log_size - offset
         if lag < 0:
             lag = 0
         return lag
 
-    def get_date(self, group, topics):
+    def get_last_group_data(self, group):
+        """ 获取上次 group 数据 """
+        if group in self.last_data:
+            return self.last_data[group]
+        else:
+            return None
+
+    @staticmethod
+    def get_last_topic_data(data, topic):
+        """ 获取上次 topic 数据 """
+        try:
+            for i in data:
+                if topic == i['topic_name']:
+                    return i
+        except TypeError:
+            return None
+
+    def get_data(self, group, topics):
         """获取一个 group 的所有 topic 的数据"""
         try:
             group_data = []
             lag_all = 0
             log_size_all = 0
             offset_all = 0
+            # 上次运行 group 数据
+            last_group_data = self.get_last_group_data(group)
             for topic in topics:
+                # 获取上次运行 topic 数据
+                last_topic_data = self.get_last_topic_data(last_group_data, topic)
                 # 获取 topic log_size 值
                 log_size = self.get_log_size(group, topic)
                 # 获取 topic offset 值
                 offset = self.get_offset(group, topic)
                 # 获取 topic lag 值
                 lag = self.get_lag(log_size, offset)
+                if last_topic_data:
+                    # 取出上次运行的数据
+                    last_log_size = last_topic_data['log_size']
+                    last_offset = last_topic_data['offset']
+                    # 得到速度
+                    log_size_speed = (log_size - last_log_size) // self.sleep_time
+                    offset_speed = (offset - last_offset) // self.sleep_time
+                else:
+                    log_size_speed = 0
+                    offset_speed = 0
                 # topic 内的数据字典
-                topic_data = {'topic_name': topic, 'lag': lag, 'log_size': log_size, 'offset': offset}
+                topic_data = dict(topic_name=topic, lag=lag, log_size=log_size, offset=offset,
+                                  log_size_speed=log_size_speed, offset_speed=offset_speed)
                 group_data.append(topic_data)
                 lag_all += lag
                 log_size_all += log_size
                 offset_all += offset
             # 一个 group 数据总和
-            group_all = {'lag': lag_all, 'log_size': log_size_all, 'offset': offset_all}
+            group_all = dict(lag=lag_all, log_size=log_size_all, offset=offset_all)
             group_data.append(group_all)
             return group_data
         except Exception as e:
@@ -182,7 +218,7 @@ class KafkaMonitor(object):
                 if not topics:
                     continue
                 # 获取 group 数据列表
-                group_data = self.get_date(group, topics)
+                group_data = self.get_data(group, topics)
                 if group_data:
                     group_all = group_data.pop()
                     lag_all += group_all['lag']
@@ -195,6 +231,8 @@ class KafkaMonitor(object):
                                    'offset': offset_all}
             group_all_data_list = [group_all_data_dict]
             data['All'] = group_all_data_list
+            # 数据浅复制到 self.last_data
+            self.last_data = data
             # 本次循环的data 字典加入到 Queue
             self.data_queue.put(data)
             self.consumer_dict_clean()
@@ -209,7 +247,7 @@ class KafkaMonitor(object):
         while True:
             self.worker()
             # 睡眠
-            time.sleep(self.sleep_time)
+            time.sleep(self.sleep_time - 1)
 
 
 class EsIndex(object):
@@ -250,7 +288,7 @@ class EsIndex(object):
             self.es.index(index=index_name, doc_type=doc_type, body=data_json)
         except Exception as e:
             date = datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f')
-            print(u"%s index数据插入es失败" % date)
+            print(u"%s index数据插入es失败 %s" % date, e)
 
     def bulk_data(self):
         """ 构造要插入的bulk数据 """
@@ -281,7 +319,7 @@ class EsIndex(object):
             helpers.bulk(self.es, data)
         except Exception as e:
             date = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
-            print(u'%s bulk数据插入es失败' % date)
+            print(u'%s bulk数据插入es失败 %s' % date, e)
 
     def es_bulk_worker(self):
         """ bulk 插入 """
