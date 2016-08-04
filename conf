@@ -1,15 +1,22 @@
 [kafka]
+# kafka ip端口地址
 ip_port=127.0.0.1:9092
 
 [zookeepers]
+# zookeepers ip端口地址
 ip_port=127.0.0.1:2181
 
 [elasticsearch]
+# elasticsearch ip端口地址
 ip_port=127.0.0.1:9200
+# elasticsearch 索引名字
 index_name=kafka
+# 数据总和文档type
 all_type_name=all
+# 一次bulk提交数量
 bulk_num=10
 
 [time]
+# 睡眠时间
 sleep_time=10
 
