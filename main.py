@@ -4,7 +4,7 @@
 
 # @Time    : 16-7-27 上午9:32
 # @Author  : leon
-# @Site    : 
+# @Site    :
 # @File    : main.py
 # @Software: PyCharm
 
@@ -52,7 +52,8 @@ class MyConsumer(SimpleConsumer):
 
 class KafkaMonitor(object):
     def __init__(self, queue, kf_ip_port='localhost',
-                 zk_ip_port='localhost', kf_sleep_time=10, all_data_type_name='all'):
+                 zk_ip_port='localhost', kf_sleep_time=10,
+                 all_data_type_name='all'):
         # 连接 kafka
         self.kafka_hosts = kf_ip_port
         self.broker = SimpleClient(hosts=self.kafka_hosts)
@@ -91,7 +92,8 @@ class KafkaMonitor(object):
         consumer = MyConsumer(self.broker, group, str(topic))
         self.consumers[k_name] = consumer
         date = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
-        print('threading', date, len(self.consumers), group, topic, self.consumers)
+        print('threading', date, len(self.consumers),
+              group, topic, self.consumers)
         return self._get_log_size(consumer)
 
     @staticmethod
@@ -114,7 +116,8 @@ class KafkaMonitor(object):
         """topic下生产量"""
         try:
             log_size = 0
-            partitions = self.zk.get_children("/consumers/%s/offsets/%s" % (group, topic))
+            path = "/consumers/%s/offsets/%s" % (group, topic)
+            partitions = self.zk.get_children(path)
             for partition in partitions:
                 log = "/consumers/%s/offsets/%s/%s" % (group, topic, partition)
                 if self.zk.exists(log):
@@ -160,7 +163,8 @@ class KafkaMonitor(object):
             last_group_data = self.get_last_group_data(group)
             for topic in topics:
                 # 获取上次运行 topic 数据
-                last_topic_data = self.get_last_topic_data(last_group_data, topic)
+                last_topic_data = self.get_last_topic_data(last_group_data,
+                                                           topic)
                 # 获取 topic log_size 值
                 log_size = self.get_log_size(group, topic)
                 # 获取 topic offset 值
@@ -172,20 +176,23 @@ class KafkaMonitor(object):
                     last_log_size = last_topic_data['log_size']
                     last_offset = last_topic_data['offset']
                     # 得到速度
-                    log_size_speed = (log_size - last_log_size) // self.sleep_time
+                    log_size_diff = log_size - last_log_size
+                    log_size_speed = log_size_diff // self.sleep_time
                     offset_speed = (offset - last_offset) // self.sleep_time
                 else:
                     log_size_speed = 0
                     offset_speed = 0
                 # topic 内的数据字典
-                topic_data = dict(topic_name=topic, lag=lag, log_size=log_size, offset=offset,
-                                  log_size_speed=log_size_speed, offset_speed=offset_speed)
+                topic_data = dict(topic_name=topic, lag=lag, log_size=log_size,
+                                  offset=offset, log_size_speed=log_size_speed,
+                                  offset_speed=offset_speed)
                 group_data.append(topic_data)
                 lag_all += lag
                 log_size_all += log_size
                 offset_all += offset
             # 一个 group 数据总和
-            group_all = dict(lag=lag_all, log_size=log_size_all, offset=offset_all)
+            group_all = dict(lag=lag_all, log_size=log_size_all,
+                             offset=offset_all)
             group_data.append(group_all)
             return group_data
         except Exception as e:
@@ -227,7 +234,8 @@ class KafkaMonitor(object):
                     # group 数据列表加入到本次循环的data 字典
                     data[group] = group_data
             # 所有 group 数据总和
-            group_all_data_dict = {'topic_name': self.all_data_type_name, 'lag': lag_all, 'log_size': log_size_all,
+            group_all_data_dict = {'topic_name': self.all_data_type_name,
+                                   'lag': lag_all, 'log_size': log_size_all,
                                    'offset': offset_all}
             group_all_data_list = [group_all_data_dict]
             data['All'] = group_all_data_list
@@ -271,7 +279,8 @@ class EsIndex(object):
         """数据整理、拆分 放入Queue"""
         for k, v in data.items():
             for i in v:
-                i['@timestamp'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')
+                date = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')
+                i['@timestamp'] = date
                 self.es_data_queue.put(i)
 
     def es_index(self, data):
@@ -372,10 +381,12 @@ if __name__ == '__main__':
     # KafkaMonitor 实例化
     kafka = KafkaMonitor(data_queue, kf_ip_port=kafka_ip_port,
                          zk_ip_port=zookeepers_ip_port,
-                         kf_sleep_time=sleep_time, all_data_type_name=all_data_type_name)
+                         kf_sleep_time=sleep_time,
+                         all_data_type_name=all_data_type_name)
     # EsIndex 实例化
     es = EsIndex(data_queue, es_index_name=elasticsearch_index_name,
-                 es_ip_port=elasticsearch_ip_port, bulk_num=elasticsearch_bulk_num)
+                 es_ip_port=elasticsearch_ip_port,
+                 bulk_num=elasticsearch_bulk_num)
     # kafka 线程实例化 启动
     thread_kafka = MyThread(kafka.run)
     thread_kafka.start()
