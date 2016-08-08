@@ -185,7 +185,7 @@ class KafkaMonitor(object):
                 # topic 内的数据字典
                 topic_data = dict(topic_name=topic, lag=lag, log_size=log_size,
                                   offset=offset, log_size_speed=log_size_speed,
-                                  offset_speed=offset_speed)
+                                  offset_speed=offset_speed, group_name=group)
                 group_data.append(topic_data)
                 lag_all += lag
                 log_size_all += log_size
@@ -233,11 +233,29 @@ class KafkaMonitor(object):
                     offset_all += group_all['offset']
                     # group 数据列表加入到本次循环的data 字典
                     data[group] = group_data
+
             # 所有 group 数据总和
-            group_all_data_dict = {'topic_name': self.all_data_type_name,
-                                   'lag': lag_all, 'log_size': log_size_all,
-                                   'offset': offset_all}
+            last_group_all_list = self.get_last_group_data('All')
+            last_group_all = self.get_last_topic_data(last_group_all_list,
+                                                      self.all_data_type_name)
+            if last_group_all:
+                # 取出上次运行的数据
+                last_log_size = last_group_all['log_size']
+                last_offset = last_group_all['offset']
+                # 得到速度
+                log_size_diff = log_size_all - last_log_size
+                log_size_speed = log_size_diff // self.sleep_time
+                offset_speed = (offset_all - last_offset) // self.sleep_time
+            else:
+                log_size_speed = 0
+                offset_speed = 0
+            group_all_data_dict = dict(topic_name=self.all_data_type_name,
+                                       lag=lag_all, log_size=log_size_all,
+                                       offset=offset_all, group_name='All',
+                                       log_size_speed=log_size_speed,
+                                       offset_speed=offset_speed)
             group_all_data_list = [group_all_data_dict]
+
             data['All'] = group_all_data_list
             # 数据浅复制到 self.last_data
             self.last_data = data
@@ -285,8 +303,10 @@ class EsIndex(object):
 
     def es_index(self, data):
         try:
-            # 获取 topic_name
-            doc_type = data['topic_name']
+            # 获取 doc_type
+            doc_type = '%s_%s' % (data['group_name'], data['topic_name'])
+            # 添加 my_type 字段
+            data['my_type'] = doc_type
             # 转换为 json
             data_json = json.dumps(data)
             # 获取日期
@@ -304,8 +324,10 @@ class EsIndex(object):
         bulk_data = []
         while True:
             data = self.es_data_queue.get()
-            # 获取 topic_name
-            doc_type = data['topic_name']
+            # 获取 doc_type
+            doc_type = '%s_%s' % (data['group_name'], data['topic_name'])
+            # 添加 my_type 字段
+            data['my_type'] = doc_type
             # 转换为 json
             data_json = json.dumps(data)
             # 获取日期
