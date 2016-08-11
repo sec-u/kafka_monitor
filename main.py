@@ -197,6 +197,7 @@ class KafkaMonitor(object):
             return group_data
         except Exception as e:
             date = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+            group = group.encode('utf-8')
             print("%s 获取group %s 数据失败" % (date, group))
             logging.exception(e)
             return None
