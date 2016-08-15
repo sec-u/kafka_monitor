@@ -98,7 +98,7 @@ class KafkaMonitor(object):
 
     @staticmethod
     def _get_log_size(consumer):
-        """topic下消费量"""
+        """topic下生产量"""
         offset = consumer.my_pending()
         return offset
 
@@ -113,7 +113,7 @@ class KafkaMonitor(object):
             return self.add_consumer_dict(group, topic)
 
     def get_offset(self, group, topic):
-        """topic下生产量"""
+        """topic下消费量"""
         try:
             log_size = 0
             path = "/consumers/%s/offsets/%s" % (group, topic)
