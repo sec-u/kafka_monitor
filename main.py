@@ -17,7 +17,6 @@ from datetime import datetime
 from threading import Thread
 from elasticsearch import Elasticsearch, helpers
 from kafka import SimpleClient
-from kafka.consumer import SimpleConsumer
 from kazoo.client import KazooClient
 from kafka.structs import OffsetRequestPayload
 
@@ -31,10 +30,14 @@ class MyThread(Thread):
         self.func()
 
 
-class MyConsumer(SimpleConsumer):
+class MyConsumer(object):
+    def __init__(self, client, topic):
+        self.client = client
+        self.topic = topic
+
     def my_pending(self, partitions=None):
         if partitions is None:
-            partitions = self.offsets.keys()
+            partitions = self.client.get_partition_ids_for_topic(self.topic)
 
         reqs = []
         offset_total = 0
@@ -89,7 +92,7 @@ class KafkaMonitor(object):
     def add_consumer_dict(self, group, topic):
         """添加 consumers 连接"""
         k_name = '%s_%s' % (str(group), str(topic))
-        consumer = MyConsumer(self.broker, group, str(topic))
+        consumer = MyConsumer(self.broker, str(topic))
         self.consumers[k_name] = consumer
         date = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
         print('threading', date, len(self.consumers),
