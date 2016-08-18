@@ -98,8 +98,9 @@ class EsIndex(object):
             # 获取原始数据
             data = self.data_queue.get()
             # 原始数据整理、拆分 放入Queue
-            for i in data:
-                self.es_data_queue.put(i)
+            for k in data:
+                v = data[k]
+                self.es_data_queue.put(v)
 
     def run(self):
         thread_data = MyThread(self.data_worker)

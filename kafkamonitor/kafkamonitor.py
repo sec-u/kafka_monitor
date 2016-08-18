@@ -18,30 +18,50 @@ from kazoo.client import KazooClient
 
 def get_logsize(client, topic, partitions=None):
     if partitions is None:
+        # 获取 partitions
         partitions = client.get_partition_ids_for_topic(topic)
 
     data = {}
 
-    for partition in partitions:
-        reqs = [OffsetRequestPayload(topic, partition, -1, 1)]
+    # 判断 topic 是否在 client.topic_partitions, 不在则创建
+    # client.topic_partitions = {}   # topic -> partition -> leader
+    if topic not in client.topic_partitions:
+        client.load_metadata_for_topics(topic)
 
-        resps = client.send_offset_request(reqs)
-        for resp in resps:
-            pending = resp.offsets[0]
-            data[partition] = pending
+    # 验证 partition 是否有问题
+    for partition in partitions:
+        if client.topic_partitions[topic][partition] == -1:
+            # 有问题则删除
+            partitions.remove(partition)
+            data[partition] = None
+
+    reqs = []
+    for partition in partitions:
+        reqs.append(OffsetRequestPayload(topic, partition, -1, 1))
+
+    resps = client.send_offset_request(reqs)
+
+    for resp in resps:
+        pending = resp.offsets[0]
+        partition = resp.partition
+        data[partition] = pending
 
     return data
 
 
 class KafkaMonitor(object):
-    def __init__(self, kf_ip_port='localhost',
-                 zk_ip_port='localhost'):
+    def __init__(self, queue, kf_ip_port='localhost',
+                 zk_ip_port='localhost', sleep_time=10):
         # 连接 kafka
         self.kafka_hosts = kf_ip_port
         self.broker = SimpleClient(hosts=self.kafka_hosts)
         # 连接zookeeper
         self.zookeepers_hosts = zk_ip_port
         self.zk = KazooClient(hosts=self.zookeepers_hosts, read_only=True)
+        # 数据存放
+        self.queue = queue
+        # 时间间隔
+        self.sleep_time = sleep_time - 1
 
     def get_group(self):
         """获取zookeepers下的group"""
@@ -56,7 +76,7 @@ class KafkaMonitor(object):
         except Exception:
             return None
 
-    def get_log_size(self, topic):
+    def get_logsize(self, topic):
         return get_logsize(self.broker, topic)
 
     def get_partition_offset(self, group, topic, partition):
@@ -79,7 +99,7 @@ class KafkaMonitor(object):
 
             for partition in partitions:
                 data = self.get_partition_offset(group, topic, partition)
-                offset[partition] = data
+                offset[int(partition)] = int(data)
 
             return offset
 
@@ -93,12 +113,12 @@ class KafkaMonitor(object):
             for topic in topics:
 
                 # 获取 topic log_size 值
-                log_size = self.get_log_size(topic)
+                log_size = self.get_logsize(topic)
                 # 获取 topic offset 值
                 offset = self.get_offset(group, topic)
 
                 # topic 内的数据字典
-                topic_data = dict(topic_name=topic, log_size=log_size,
+                topic_data = dict(topic_name=topic, logsize=log_size,
                                   offset=offset, group_name=group)
                 key = '%s_%s' % (group, topic)
                 group_data[key] = topic_data
@@ -146,5 +166,10 @@ class KafkaMonitor(object):
     def run(self):
         self.zk.start()
         while True:
+            t0 = time.clock()
             data = self.get_data()
-            yield data
+            self.queue.put(data)
+            # 执行间隔时间
+            t = time.clock() - t0
+            # 睡眠时间减去执行时间 保证间隔时间相等
+            time.sleep(self.sleep_time - t)
