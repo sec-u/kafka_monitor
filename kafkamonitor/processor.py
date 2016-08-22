@@ -49,7 +49,11 @@ class Processor(object):
         date = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')
         doc_type = '%s_%s' % (data['group_name'], data['topic_name'])
 
+        # 从 offset 获取key，并判断 logsize 是否有此 key
         for i in offset.keys():
+            if i not in logsize:
+                    return None
+            # 判断 key 值是否有None
             if offset[i] and logsize[i]:
                 offset_all += offset[i]
                 logsize_all += logsize[i]
