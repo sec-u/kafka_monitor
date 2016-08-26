@@ -20,7 +20,7 @@ class Processor(object):
         self.time = time
 
     def get_data(self):
-        for k in self.data:
+        for k in self.data.keys():
             data = self.data[k]
             # 获取topic数据
             topic_data = self.processor_data(data)
@@ -49,10 +49,12 @@ class Processor(object):
         date = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')
         doc_type = '%s_%s' % (data['group_name'], data['topic_name'])
 
-        # 从 offset 获取key，并判断 logsize 是否有此 key
         for i in offset.keys():
+
+            # 从 offset 获取key，并判断 logsize 是否有此 key
             if i not in logsize:
-                    return None
+                    continue
+
             # 判断 key 值是否有None
             if offset[i] and logsize[i]:
                 offset_all += offset[i]
@@ -91,7 +93,7 @@ class Processor(object):
 
     def get_speed(self):
         """ 获取速度 """
-        for k in self.data:
+        for k in self.data.keys():
             if k not in self.old_data:
                 continue
 
