@@ -171,5 +171,10 @@ class KafkaMonitor(object):
             self.queue.put(data)
             # 执行间隔时间
             t = time.clock() - t0
+
             # 睡眠时间减去执行时间 保证间隔时间相等
-            time.sleep(self.sleep_time - t)
+            sleep_time = self.sleep_time - t
+            if sleep_time < 0:
+                sleep_time = 0
+
+            time.sleep(sleep_time)
