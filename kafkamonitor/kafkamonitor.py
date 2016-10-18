@@ -10,10 +10,12 @@
 
 import time
 import logging
-from datetime import datetime
 from kafka import SimpleClient
 from kafka.structs import OffsetRequestPayload
 from kazoo.client import KazooClient
+
+
+logger = logging.getLogger('KafkaMonitor')
 
 
 def get_logsize(client, topic, partitions=None):
@@ -73,8 +75,8 @@ class KafkaMonitor(object):
         try:
             topics = self.zk.get_children("/consumers/%s/owners" % group)
             return topics
-        except Exception:
-            return None
+        except Exception as e:
+            logging.error('get group topics failed! %s' % e)
 
     def get_logsize(self, topic):
         return get_logsize(self.broker, topic)
@@ -86,6 +88,7 @@ class KafkaMonitor(object):
             data, stat = self.zk.get(path)
             return data
         else:
+            logger.error('get group:%s topic:%s partition:%s offset failed!' % (group, topic, partition))
             return None
 
     def get_offset(self, group, topic):
@@ -103,7 +106,8 @@ class KafkaMonitor(object):
 
             return offset
 
-        except Exception:
+        except Exception as e:
+            logger.error('get group:%s topic:%s offset failed! %s' % (group, topic, e))
             return None
 
     def get_group_data(self, group, topics):
@@ -126,12 +130,7 @@ class KafkaMonitor(object):
             return group_data
 
         except Exception as e:
-
-            date = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
-            group = group.encode('utf-8')
-            print("%s 获取group %s 数据失败" % (date, group))
-
-            logging.exception(e)
+            logger.error('get group:%s offset failed! %s' % (group, e))
             return None
 
     def get_data(self):
@@ -157,10 +156,7 @@ class KafkaMonitor(object):
             return data
 
         except Exception as e:
-            date = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
-            print(date)
-
-            logging.exception(e)
+            logger.error('get offset failed! %s' % e)
             time.sleep(3)
 
     def run(self):

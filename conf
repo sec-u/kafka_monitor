@@ -1,10 +1,17 @@
 [kafka]
 # kafka ip端口地址
-ip_port=127.0.0.1:9092
+# 注意此处 kafka 配置文件的key,需要与zookeeper 地址配置文件的key 一一对应
+# 集群1的 kafka 地址
+ip_port1=127.0.0.1:9092
+# 集群2的 kafka 地址
+ip_port2=127.0.0.2:9092
 
 [zookeepers]
 # zookeepers ip端口地址
-ip_port=127.0.0.1:2181
+# 集群1的 zookeeper 地址
+ip_port1=127.0.0.1:2181
+# 集群2的 zookeeper 地址
+ip_port2=127.0.0.2:2181
 
 [elasticsearch]
 # elasticsearch ip端口地址

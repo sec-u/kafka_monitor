@@ -21,8 +21,8 @@ if __name__ == '__main__':
     cf = ConfigParser()
     cf.read('conf')
 
-    kafka_ip_port = cf.get('kafka', 'ip_port')
-    zookeepers_ip_port = cf.get('zookeepers', 'ip_port')
+    kafka_ip_port_dict = dict(cf.items('kafka'))
+    zookeepers_ip_port_dict = dict(cf.items('zookeepers'))
     sleep_time = cf.getint('time', 'sleep_time')
 
     es_ip_port = cf.get('elasticsearch', 'ip_port')
@@ -34,10 +34,23 @@ if __name__ == '__main__':
     raw_data_queue = Queue()
     processing_data_queue = Queue()
 
-    # KafkaMonitor 实例化
-    kafka = KafkaMonitor(raw_data_queue, kf_ip_port=kafka_ip_port,
-                         zk_ip_port=zookeepers_ip_port,
-                         sleep_time=sleep_time)
+    for i in kafka_ip_port_dict.keys():
+        kafka_ip_port = kafka_ip_port_dict[i]
+        zookeepers_ip_port = zookeepers_ip_port_dict.get(i)
+
+        if not zookeepers_ip_port:
+            # 配置文件有误 退出
+            exit(1)
+
+        # KafkaMonitor 实例化
+        kafka = KafkaMonitor(raw_data_queue, kf_ip_port=kafka_ip_port,
+                             zk_ip_port=zookeepers_ip_port,
+                             sleep_time=sleep_time)
+
+        # kafka 线程实例化 启动
+        thread_kafka = MyThread(kafka.run)
+        thread_kafka.start()
+
     # processor 实例化
     processor = Processor(raw_data_queue=raw_data_queue,
                           processing_data_queue=processing_data_queue,
@@ -46,10 +59,6 @@ if __name__ == '__main__':
     # EsIndex 实例化
     es = EsIndex(processing_data_queue, es_index_name=es_index_name,
                  es_ip_port=es_ip_port, bulk_num=es_bulk_num)
-
-    # kafka 线程实例化 启动
-    thread_kafka = MyThread(kafka.run)
-    thread_kafka.start()
 
     # processor 线程实例化 启动
     thread_processor = MyThread(processor.work)
